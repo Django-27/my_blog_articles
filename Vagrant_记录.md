@@ -1,0 +1,332 @@
+    # -*- mode: ruby -*-
+    
+    # vi: set ft=ruby :
+    
+    
+    
+    app_server = {
+    
+        :mfschunk1 => '192.168.33.20',
+    
+        :mfschunk2 => '192.163.33.21'
+    
+    }
+    
+    
+    
+    Vagrant.configure("2") do |config|
+    
+        config.vm.box = "pc2/qiyuan" # 指定当前虚拟机使用的本地仓库box镜像名称
+    
+        
+    
+        config.vm.define :mfsmaster do |mfsmaster_config| # 指定配置节点和配置信息的名字，如果Vagrantfile配置文件只定义了一个vm，这个配置节点层次可以忽略
+    
+            # mfsmaster_config.vm.network :private_network, ip: "192.168.33.10" # 配置当前vm的host-only网络的ip地址为192.163.33.10
+    
+    	config.vm.provider :virtualbox do |vb|
+    
+    	    vb.name = "mfsmaster"
+    
+    	    vb.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+    
+    	    vb.customize ["modifyvm", :id, "--memory", "256"]
+    
+    	    vb.customize ["modifyvm", :id, "--cpus", 2]
+    
+    	    vb.cpus = 2
+    
+    	end
+    
+        end
+    
+    
+    
+        app_server.each do |app_server_name, app_server_ip|
+    
+    	config.vm.define app_server_name do |app_config|
+    
+    	    app_config.vm.hostname = "#{app_server_name.to_s}.vagrant.internal"
+    
+    	    app_config.vm.network :private_network, ip: app_server_ip
+    
+    	    app_config.vm.provider "virtualbox" do |vb|
+    
+    		vb.name = app_server_name.to_s
+    
+    	    end
+    
+            end
+    
+        end 
+    
+    
+    
+        config.vm.define :metalogger do |metalogger_config|
+    
+    	metalogger_config.vm.hostname = "metalogger.vagrant.internal"
+    
+    	metalogger_config.vm.network :private_network, ip: "192.163.33.30"
+    
+    	metalogger_config.vm.provider "virtualbox" do |vb|
+    
+    	    vb.name = "metalogger"
+    
+    	    vb.customize ["modifyvm", :id, "--cpuexecutioncap", "50"]
+    
+    	    vb.customize ["modifyvm", :id, "--memory", "256"]
+    
+    	    vb.customize ["modifyvm", :id, "--cpus", "2"]
+    
+    	    vb.cpus = 2
+    
+    	end
+    
+        end
+    
+    
+    
+        config.vm.define :mfsclient do |mfsclient_config|
+    
+    	mfsclient_config.vm.hostname = "mfsclient.vagrant.internal"
+    
+    	mfsclient_config.vm.network :private_network, ip: "192.163.33.40"
+    
+    	mfsclient_config.vm.provider "virtualbox" do |vb|
+    
+    	    vb.name = "nfsclient"
+    
+    	end
+    
+        end
+    
+    end
+
+
+
+vagrant status 可以查看到虚拟机的配置，up命令可以全部启动，也可以指定一台启动
+vagrant的网络连接方式有三种：
+    * NAT：缺省创建，用于让vm可以通过host转发访问局域网甚至互联网
+    * host-only：只有主机可以访问vm，其他机器无法访问它；也可以不指定而通过dhcp自动生成方式
+      config.vm.network :"private_network", ip: "192.168.33.10"
+      config.vm.network :"private_network", type: "dhcp"
+    * bridge：此模式下vm就像局域网中的一台独立的机器，可以被其他机器访问；指定IP，指定桥接适配器，不指定桥接适配器三种方式;如果host有多个网络适配器，第一次启动时会询问桥接到哪个网络
+      config.vm.network :"public_network", ip: "192.163.0.17"
+      config.vm.network :"public_network", bridge: "en1: Wi-Fi (AirPort)"
+      config.vm.network :"public_network"
+
+端口映射方式，映射虚拟机中的80端口到宿主机8080；这样可以使用localhost/8080
+      config.vm.network :forwarded_port, guest: 80, host: 8080
+私有网络,192.168.1.104表示虚拟机ip，多台虚拟机互访设在一个网段即可；只有你的电脑可以访问虚拟机
+      config.vm.network :private_network, ip: "192.168.1.104"
+桥接(公开网络)，可通过广播域的dhcp分配ip；当前网络的其他t其他其它设备都可以访问虚拟机
+      config.vm.network :public_network
+
+有关同步文件，缺省时将工作目录映射到vm的/vagrant目录，也可指定
+      config.vm.synced_folder "../data", "/vagrant_data"
+
+指定vm的hostname，会覆盖vm中/etc/hostname中的设置
+      config.vm.hostname = "mfsmaster.vagrant.internal"
+
+端口转发，将host的8080端口请求，转发到vm的80端口，这样访问http://host:8080就相当于访问http://vm:80
+      config.vm.network: forwarded_port, guest: 80, host: 8080
+guest和host是必须的，还有几个可选属性：
+    guest_ip: 字符串，vm指定绑定的ip， 缺省为0.0.0.0
+    host_ip：字符串，host指定绑定的ip, 缺省为0.0.0.0
+    protocal：字符串，可选TCP或UDP，却省为TCP
+
+vm提供者配置,对于不同的provider，分为通用配置和个性化配置，此处配置信息是针对virtualbox定义一个提供者，命名为vb，这个名字可以随意取，只要节点内部调用一致即可
+      config.vm.provider :virtualbox do |vb|
+          # ...
+      end
+通用的配置有name，gui，memory，cpus；而个性化的配置通过vb.customize完成定制，有name，cups，memory，vram显存，是否增加光驱等
+
+分组，组个虚拟机很多可以对vm分组，分组名是路径格式，以/开始表示第一级目录，可以指定多级目录，如/mfs/chunk；也可以指定多个分组，通多逗号分开，如"/dev,/mfs"；指定了分组后那么vm创建后就会放到指定的分组里
+      vb.customize ["modifyvm", :id, "--groups", "/dev"]
+
+一组vm的配置，通过之前的hash map，可以遍历的创建
+      app_server = {
+          :mfschunk1 => '192.168.33.20',
+	  :mfschunk2 => '192.168.33.21'}
+      app_servers.each do |app_server_name, app_server_ip|
+          config.vm.define app_server_name do |app_config|
+	      # app_config.vm.define ...
+	  end
+      end
+如果不想定义app_server也可以用下面的方案
+      (1..3).each do |i|
+              config.vm.define "app-#{i}" do |node|
+              app_config.vm.hostname = "app-#{i}.vagrant.internal"
+	      app_config.vm.rovider "virtualbox" do |vb|
+	          vb.name = app-#{i}
+	      end
+	  end
+      end
+
+中央仓库配置，指定box镜像push发布的地址，供box镜像管理者使用，普通用户不需要关心
+      config.vm.define "atlas" do |push|
+          push.app = "YOUR_ATLAS_USERNAME/YOUR_APPLICATION-NAME"
+      end
+
+ vm部署，用来加载box后对vm的环境进行一些定制，比如环境变量，安装软件，部署程序等
+       config.vm.provision "shell", inline: <<-SHELL
+           sudo apt-get update
+	   sudo apt-get install -y apache2
+       SHELL
+
+最基本的vagrantfile只需包含：
+    # -*- mode: ruby -*-
+    # vi: set ft=ruby :
+    Vagrant.configure(2) do |config|
+        ocnfig.vm.box = "qiyuan/pc1"
+    end
+还可以增加对box版本的指定
+    config.vm.box_version = "745.1.0"
+移除box时若有多个版本也需要进行指定
+    vagrant box remove box_name --box-version=745.1.0 [--all]
+
+检查镜像是否有升级：
+    vagrant box outdated [--global]
+    vagrant box update
+
+打包
+    vagrant package --bash [virtualbox的工作目录] --output [保存的文件名，缺省为package.box]
+    vagrant package --output virtualbox_new_name.box --vagrantfile Vagrantfile
+虚拟机文件所在的目录和Vagrantfile所在的目录不一定相同，如果在Vagrantfile中指定了vb.name，virtualbox工作目录就是 vagrant工作目录_随机字符串，查看名称
+    VBoxManage list vms | grep ubuntu
+
+快照：vagrant snapshot命令是vm的月光宝盒，如果一个vm任务没有跑完，需要管理virtual box，就可以给vm做一个快照，保存vm当前所有的状态，在virtualbox重新启动后，再恢复快照;恢复后的快照也一直存在，直到手动删除
+    vagrant snapshot list
+    vagrant snapshot save shot_name_1
+    vagrant snapshot restore shot_name_1
+    vagrant snapshot delete shot_name_1
+
+盗梦空间：push和pop，每次push都会自动创建一个命名快照，名为push+一串随机数，每调用一次pop都会逐级恢复到最新的快照;在pop清空之前，也可以通过restore恢复其中的一个快照
+    vagrant snapshot list
+    vagrant snapshot push
+    vagrant snapshot list
+    vagrant snapshot pop
+
+远程连接分享：通过share和connect两个命令可以实现本机vagrant连接另外一台host上的虚拟机;可以通过--name指定，否则将是一个随机名字；之后便可以连接远端ssh虚拟机
+    vagrant share --ssh [--name share_name_1]
+    vagrant connect --ssh share_name_1 --static-ip 10.2.136.221
+
+共享http:之后互联网任意角落可通过URL访问到虚拟机的http服务
+    ~/apache-tomcat-8.0.28/bin/startup.sh
+    vagrant share --http 80
+ 
+无需进入vagrant工作目录，通过vagrant global-status 可以查看全部虚拟机状态，第一列就是vagrant的id，也可以通过此id进行up操作
+
+监控虚拟机：查看sshd配置信息，查看虚拟机开放的端口，查看当前vm状态，查看全部vm状态
+    vagrant ssh-config
+    vagrant port
+    vagrant status
+    vagrant global-status
+
+打包前打包前要删除文件
+sudo rm -rf /etc/udev/rules.d/70-persistent-net.rules
+
+
+vagrant box add --name pc2/qiyuan /path/file/*.box
+
+vagrant init box的名字
+
+
+
+    config.vm.box = "ninghao"
+    
+    config.vm.define "development" do |development|
+        development.vm.network "private_network", ip: "192.168.33.11" # 私有私有网络的地址段不能和路由器的地址段相同 
+        development.vm.hostname = "slave1"
+        development.vm.synced_folder "dev_file", "/vagrant"
+    end
+    
+    config.vm.define "production" do |production|
+        production.vm.network "private_network", ip: "192.168.33.22"
+        production.vm.hostname = "slave2"
+        production.vm.synced_folder "pro_file", "/vagrant"
+    end
+
+还有好好理解理解理解理解同一个网段的意思
+例如路由器的网段是192.168.1.*；那么私有网络的设定就要避开这个网段 
+如果你选择共有网络，i并且使用的额的是是WiFi,那么无线路由器分配给你的就是一个192.163.1.*的ip
+
+
+配置一个Appche虚拟主机
+sudo service httpd start
+sudo vim /etc/httpd/conf/httd.conf
+NameVirtualHost *:80
+<VirtualHost *:80>
+    DocumentRoot /vagrant/www/
+<VirtualHost>
+
+![enter image description here][1]
+
+
+  [1]: images/2017-02-07-20-QQ%E6%88%AA%E5%9B%BE20170207132831.png "QQ截图20170207132831.png"
+
+
+安装插件实现通过主机名实现互访
+vagrant plugin install vagrant-hostmanager
+    Vagrant.configure(2) do |config|
+        conifg.vm.box = "qiyuan/pc1"
+        **config.hostmanager.enabled = true**
+        **config.hostmanager.manage_guest = true**
+        **config.hostmanager.manage_host = true**
+        config.vm.define "node1" do |node1|
+            node1.vm.network "private_network", ip: "192.163.33.11"
+            node1.vm.hostname = "node1"
+        end
+        config.vm.define "node2" do |node2|
+            node1.vm.network "private_network", ip: "192.163.33.22"
+            node1.vm.hostname = "node2"
+        end
+    end
+跟新主机和虚拟机上的host文件 
+vagrant hostmanager
+ping node1
+vagrant ssh node1
+ping node2
+
+插件安装
+    vagrant plugin install vagrant-vbguest
+    vagrant vbguest --status
+    vagrant vbguest --do install node1
+    禁止自动更新 config.vbguest.auto_update = false
+插件安装(设置nfs类型的共享目录)
+    vagrant plugin install vagrant-bindfs
+    node1.vm.synced_folder "./app", "/mnt/app-data", type: "nfs"
+    node1.bindfs.bind_folder "/mnt/app-data", "/app"
+        force_user: "root", force_group: "root", 0: "nonempty"
+    
+    
+
+      config.vm.provision :chef_solo do |chef|
+ 
+      chef.json = {
+              postgresql: {
+                            password: {
+                              postgres: 'yourpassword'
+                            },
+                            pg_hba: [
+                              {type: 'local', db: 'all', user: 'all', addr: nil, method: 'trust'},
+                              {type: 'host', db: 'all', user: 'all', addr: '127.0.0.1/32', method: 'trust'},
+                              {type: 'host', db: 'all', user: 'all', addr: '::1/128', method: 'trust'}
+                            ]
+                          },
+              python:{install_method:'source', version:'2.7.3', checksum: 'c57477edd6d18bd9eeca2f21add73919'}
+                          }
+    chef.cookbooks_path = "../chef-recipes/cookbooks"
+    chef.add_recipe "apt"
+    chef.add_recipe "apache2::mod_wsgi"
+    chef.add_recipe "build-essential"
+    chef.add_recipe "git"
+    chef.add_recipe "vim"
+    chef.add_recipe "openssl"
+    chef.add_recipe "postgresql"
+    chef.add_recipe "postgresql::server"
+    chef.add_recipe "yum"
+    chef.add_recipe "python"
+  end
+
+
