@@ -1,3 +1,10 @@
+---
+title: Vagrant_记录
+date:
+tags:
+---
+
+
     # -*- mode: ruby -*-
     
     # vi: set ft=ruby :
